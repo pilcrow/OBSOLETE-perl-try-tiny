@@ -1,0 +1,33 @@
+This file contains message digests of all files listed in MANIFEST,
+signed via the Module::Signature module, version 0.62.
+
+To verify the content in this distribution, first make sure you have
+Module::Signature installed, then type:
+
+    % cpansign -v
+
+It will check each file's integrity, as well as the signature's
+validity.  If "==> Signature verified OK! <==" is not displayed,
+the distribution may already have been compromised, and you should
+not run its Makefile.PL or Build.PL.
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+SHA1 957e8f9c0e12c1547efb85343216ef12d4bcfb06 Changes
+SHA1 e0d38faf7e10305aad82516b621327795e84a4d7 MANIFEST
+SHA1 606bd6424682249397d63caf905f651178a4d6cc MANIFEST.SKIP
+SHA1 36f046418209e9c6fd01f2c403e33490cee21cd6 META.yml
+SHA1 6adc37b24473f070c318abfe77a8531fbf1eefca Makefile.PL
+SHA1 047db379a24d4021ada1e6f7278cb2f630f83818 lib/Try/Tiny.pm
+SHA1 f87be39d1cb320cd0ac206143f59accdecf21814 t/basic.t
+SHA1 567bd02fb537a942cb00333bf6f31981c20532bb t/finally.t
+SHA1 2f1251b4029f254926db73b638e221a75c9c0828 t/given_when.t
+SHA1 c75ffed79f4936105b81aa82443b0a0a87c78873 t/when.t
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG/MacGPG2 v2.0.12 (Darwin)
+
+iEYEARECAAYFAkv+P8gACgkQVCwRwOvSdBhNTQCfemUpeyNeynVo1QoT9GT5RJd9
+k7EAoIYNLmc02tATaI/mqzrkw5BMGm5C
+=Djyj
+-----END PGP SIGNATURE-----
