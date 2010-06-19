@@ -67,7 +67,6 @@ sub try (&;@) {
 
 			my $catch_error = _call_catch_block($wantarray, \@ret, $catch, $try_error);
 			if ( defined($catch_error) ) {
-				print "catch block $catch had error '$catch_error'\n";
 				# actual exception doesn't matter if retry() was called
 				next if $Try::Tiny::_retry_requested;
 
