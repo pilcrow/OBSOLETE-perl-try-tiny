@@ -57,25 +57,13 @@ sub try (&;@) {
 	# not perfect, but we could provide a list of additional errors for
 	# $catch->();
 
-	while (1) {
-		my $try_error = _context_eval($wantarray, \@ret, $try);
+	TRY_TINY_TRY_LOOP: {
+		my $err = _context_eval($wantarray, \@ret, $try);
 
-		if ( defined($try_error) ) {
-			return unless $catch; # silently discard without catch block
-
-			local $Try::Tiny::_retry_requested = 0;
-
-			my $catch_error = _call_catch_block($wantarray, \@ret, $catch, $try_error);
-			if ( defined($catch_error) ) {
-				# actual exception doesn't matter if retry() was called
-				next if $Try::Tiny::_retry_requested;
-
-				# but otherwise does!
-				die $catch_error;
-			}
+		if ( defined($err) and $catch ) {
+			$err = _call_catch_block($wantarray, \@ret, $catch, $err);
+			die($err) if defined($err);
 		}
-
-		last; # no retry() called this time
 	}
 
 	return $wantarray ? @ret : $ret[0];
@@ -119,12 +107,7 @@ sub retry () {
 		croak q|Can't "retry" outside a "catch" block|;
 	}
 
-	# We communicate the retry through the dynamically scoped
-	# $_retry_requested, and ignore the class of our exception.
-	# See try()
-	$Try::Tiny::_retry_requested = 1;
-	#die bless(\$callsub, 'Try::Tiny::RetryExceptionClassIgnored');
-	die '(Try::Tiny::retry() ... this error is ignored)';
+	goto TRY_TINY_TRY_LOOP;
 }
 
 # -- utility routines
