@@ -14,7 +14,7 @@ $VERSION = "0.06";
 
 $VERSION = eval $VERSION;
 
-@EXPORT = @EXPORT_OK = qw(try catch finally);
+@EXPORT = @EXPORT_OK = qw(try catch finally retry);
 
 $Carp::Internal{+__PACKAGE__}++;
 
@@ -48,65 +48,45 @@ sub try (&;@) {
 		}
 	}
 
-	# save the value of $@ so we can set $@ back to it in the beginning of the eval
-	my $prev_error = $@;
+	# set up a scope guard to invoke the finally block at the end
+	my $guard = $finally && bless \$finally, "Try::Tiny::ScopeGuard";
 
-	my ( @ret, $error, $failed );
+	my ( @ret );
 
 	# FIXME consider using local $SIG{__DIE__} to accumulate all errors. It's
 	# not perfect, but we could provide a list of additional errors for
 	# $catch->();
 
-	{
-		# localize $@ to prevent clobbering of previous value by a successful
-		# eval.
-		local $@;
+	while (1) {
+		my $try_error = _context_eval($wantarray, \@ret, $try);
 
-		# failed will be true if the eval dies, because 1 will not be returned
-		# from the eval body
-		$failed = not eval {
-			$@ = $prev_error;
+		if ( defined($try_error) ) {
+			return unless $catch; # silently discard without catch block
 
-			# evaluate the try block in the correct context
-			if ( $wantarray ) {
-				@ret = $try->();
-			} elsif ( defined $wantarray ) {
-				$ret[0] = $try->();
-			} else {
-				$try->();
-			};
+			my $catch_error = undef;
+			local $Try::Tiny::_retry_requested = 0;
 
-			return 1; # properly set $fail to false
-		};
-
-		# copy $@ to $error; when we leave this scope, local $@ will revert $@
-		# back to its previous value
-		$error = $@;
-	}
-
-	# set up a scope guard to invoke the finally block at the end
-	my $guard = $finally && bless \$finally, "Try::Tiny::ScopeGuard";
-
-	# at this point $failed contains a true value if the eval died, even if some
-	# destructor overwrote $@ as the eval was unwinding.
-	if ( $failed ) {
-		# if we got an error, invoke the catch block.
-		if ( $catch ) {
-			# This works like given($error), but is backwards compatible and
-			# sets $_ in the dynamic scope for the body of C<$catch>
-			for ($error) {
-				return $catch->($error);
-			}
-
+			# this for loop works like given($error), but is backwards
+			# compatible and sets $_ in the dynamic scope for the body of
+			# C<$catch>.
 			# in case when() was used without an explicit return, the C<for>
 			# loop will be aborted and there's no useful return value
+			for ( $try_error ) {
+				$catch_error = _call_catch_block($wantarray, \@ret, $catch, $try_error);
+			}
+			if ( defined($catch_error) ) {
+				# actual exception doesn't matter if retry() was called
+				next if $Try::Tiny::_retry_requested;
+
+				# but otherwise does!
+				die $catch_error;
+			}
 		}
 
-		return;
-	} else {
-		# no failure, $@ is back to what it was, everything is fine
-		return $wantarray ? @ret : $ret[0];
+		last; # no retry() called this time
 	}
+
+	return $wantarray ? @ret : $ret[0];
 }
 
 sub catch (&;@) {
@@ -127,9 +107,72 @@ sub finally (&;@) {
 	);
 }
 
+sub retry () {
+	# Make sure we're called only in a catch block:
+	#
+	#   try { ... } catch { ... retry ... };
+	#
+	# Call frames for a proper invocation look like this:
+	#
+	# 5. Try::Tiny::try
+	# 4. T::T::_call_catch_block .... this is what we look for
+	# 3. T::T::_context_eval
+	# 2. (eval)
+	# 1. ANON ....................... the user-supplied block
+	# 0. T::T::retry
+	#
+	my $callsub = ((caller(4))[3] || '');
+	unless ($callsub eq 'Try::Tiny::_call_catch_block') {
+		# Error inspired by:  Can't "redo" outside a loop block
+		croak q|Can't "retry" outside a "catch" block|;
+	}
+
+	# We communicate the retry through the dynamically scoped
+	# $_retry_requested, and ignore the class of our exception.
+	# See try()
+	$Try::Tiny::_retry_requested = 1;
+	#die bless(\$callsub, 'Try::Tiny::RetryExceptionClassIgnored');
+	die '(Try::Tiny::retry() ... this error is ignored)';
+}
+
+# -- utility routines
+
 sub Try::Tiny::ScopeGuard::DESTROY {
 	my $self = shift;
 	$$self->();
+}
+
+sub _call_catch_block {
+	# this sub exists so that retry() below can determine if it was called
+	# as part of a catch block.  See the dispatch under try(), above.
+	my ($wantarray, $retref, $catch, $error) = @_;
+	_context_eval($wantarray, $retref, $catch, $error);
+}
+
+# Invoke user-supplied CODEref and arguments in a given context,
+# capturing its return values in an output variable and making a best
+# effort to return its exception object, if any.
+#
+sub _context_eval {
+	my ($wantarray, $retref, $code, @args) = @_;
+	my $prev_error = $@;    # let the user's CODE see the enclosing $@
+
+	local $@;               # restore $@ when this sub finishes
+	my $failed = not eval {
+		$@ = $prev_error;
+
+		if ($wantarray) {
+			@$retref = $code->(@args);
+		} elsif (defined $wantarray) {
+			$retref->[0] = $code->(@args);
+		} else {
+			$code->(@args);
+		}
+
+		1;
+	};
+	return $@ if $failed;
+	return;
 }
 
 __PACKAGE__
