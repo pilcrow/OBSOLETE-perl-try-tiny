@@ -63,18 +63,11 @@ sub try (&;@) {
 		if ( defined($try_error) ) {
 			return unless $catch; # silently discard without catch block
 
-			my $catch_error = undef;
 			local $Try::Tiny::_retry_requested = 0;
 
-			# this for loop works like given($error), but is backwards
-			# compatible and sets $_ in the dynamic scope for the body of
-			# C<$catch>.
-			# in case when() was used without an explicit return, the C<for>
-			# loop will be aborted and there's no useful return value
-			for ( $try_error ) {
-				$catch_error = _call_catch_block($wantarray, \@ret, $catch, $try_error);
-			}
+			my $catch_error = _call_catch_block($wantarray, \@ret, $catch, $try_error);
 			if ( defined($catch_error) ) {
+				print "catch block $catch had error '$catch_error'\n";
 				# actual exception doesn't matter if retry() was called
 				next if $Try::Tiny::_retry_requested;
 
@@ -143,10 +136,19 @@ sub Try::Tiny::ScopeGuard::DESTROY {
 }
 
 sub _call_catch_block {
-	# this sub exists so that retry() below can determine if it was called
-	# as part of a catch block.  See the dispatch under try(), above.
+	# This sub principally does three things:
+	#  1. Set up a call frame reference so that retry() can determine if
+	#     it was invoked properly
+	#  2. Alias the failure ($@) from try{block} as $_ (via a for loop)
+	#  3. Permit the user's catch{block} to call 'when' without an
+	#     explicit return
 	my ($wantarray, $retref, $catch, $error) = @_;
-	_context_eval($wantarray, $retref, $catch, $error);
+
+	for ($error) {
+		return _context_eval($wantarray, $retref, $catch, $error);
+	}
+
+	return; # catch{block} called when without explicit return.
 }
 
 # Invoke user-supplied CODEref and arguments in a given context,
