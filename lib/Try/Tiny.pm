@@ -185,8 +185,9 @@ Try::Tiny - minimal try/catch with proper localization of $@
 
 =head1 DESCRIPTION
 
-This module provides bare bones C<try>/C<catch>/C<finally> statements that are designed to
-minimize common mistakes with eval blocks, and NOTHING else.
+This module provides bare bones C<try>/C<catch>/C<finally>/C<retry> statements
+that are designed to minimize common mistakes with eval blocks, and NOTHING
+else.
 
 This is unlike L<TryCatch> which provides a nice syntax and avoids adding
 another call stack layer, and supports calling C<return> from the try block to
@@ -221,12 +222,15 @@ You can add finally blocks making the following true.
 Finally blocks are always executed making them suitable for cleanup code
 which cannot be handled using local.
 
+The retry subroutine, when called from within a catch block, terminates the
+current catch block and restarts its try block.
+
 =head1 EXPORTS
 
 All functions are exported by default using L<Exporter>.
 
-If you need to rename the C<try>, C<catch> or C<finally> keyword consider using
-L<Sub::Import> to get L<Sub::Exporter>'s flexibility.
+If you need to rename the C<try>, C<catch>, C<finally> or C<retry> keywords,
+consider using L<Sub::Import> to get L<Sub::Exporter>'s flexibility.
 
 =over 4
 
@@ -291,15 +295,36 @@ Or even
 
 Intended to be the second or third element of C<try>. Finally blocks are always
 executed in the event of a successful C<try> or if C<catch> is run. This allows
-you to locate cleanup code which cannot be done via C<local()> e.g. closing a file
-handle.
+you to locate cleanup code which cannot be done via C<local()> e.g. closing a
+file handle.
 
-B<You must always do your own error handling in the finally block>. C<Try::Tiny> will
-not do anything about handling possible errors coming from code located in these
-blocks.
+B<You must always do your own error handling in the finally block>.
+C<Try::Tiny> will not do anything about handling possible errors coming from
+code located in these blocks.
 
-In the same way C<catch()> blesses the code reference this subroutine does the same
-except it bless them as C<Try::Tiny::Finally>.
+In the same way C<catch()> blesses the code reference this subroutine does the
+same except it bless them as C<Try::Tiny::Finally>.
+
+=item retry
+
+Intended to be called I<inside the top scope> of a C<catch> block.
+
+This function never returns.  Instead, it restarts the C<try> block if called
+from within the top scope of a C<catch> block, or raises an exception if
+called anywhere else.  For example:
+
+  try     { ... }
+  catch   { retry unless $ok; }  # Correct!
+  finally { ... };
+
+  try     { retry unless $ok; }; # Incorrect - must be called in catch block
+  try     { ... }
+  finally { retry unless $ok; }; # Incorrect - must be called in catch block
+
+  sub handle_error { retry; }
+  try     { ... }
+  catch   { handle_error(); };   # Incorrect - must be called in top scope
+                                 # of catch block
 
 =back
 
