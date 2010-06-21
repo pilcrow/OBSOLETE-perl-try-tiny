@@ -190,11 +190,11 @@ that are designed to minimize common mistakes with eval blocks, and NOTHING
 else.
 
 This is unlike L<TryCatch> which provides a nice syntax and avoids adding
-another call stack layer, and supports calling C<return> from the try block to
-return from the parent subroutine. These extra features come at a cost of a few
-dependencies, namely L<Devel::Declare> and L<Scope::Upper> which are
-occasionally problematic, and the additional catch filtering uses L<Moose>
-type constraints which may not be desirable either.
+another call stack layer, and supports calling C<return> from the C<try> block
+to return from the parent subroutine. These extra features come at a cost of a
+few dependencies, namely L<Devel::Declare> and L<Scope::Upper> which are
+occasionally problematic, and the additional catch filtering uses L<Moose> type
+constraints which may not be desirable either.
 
 The main focus of this module is to provide simple and reliable error handling
 for those having a hard time installing L<TryCatch>, but who still want to
@@ -204,26 +204,26 @@ It's designed to work as correctly as possible in light of the various
 pathological edge cases (see L<BACKGROUND>) and to be compatible with any style
 of error values (simple strings, references, objects, overloaded objects, etc).
 
-If the try block dies, it returns the value of the last statement executed in
-the catch block, if there is one. Otherwise, it returns C<undef> in scalar
-context or the empty list in list context. The following two examples both
-assign C<"bar"> to C<$x>.
+If the C<try> block dies, it returns the value of the last statement executed
+in the C<catch> block, if there is one. Otherwise, it returns C<undef> in
+scalar context or the empty list in list context. The following two examples
+both assign C<"bar"> to C<$x>.
 
 	my $x = try { die "foo" } catch { "bar" };
 
 	my $x = eval { die "foo" } || "bar";
 
-You can add finally blocks making the following true.
+You can add C<finally> blocks making the following true.
 
 	my $x;
 	try { die 'foo' } finally { $x = 'bar' };
 	try { die 'foo' } catch { warn "Got a die: $_" } finally { $x = 'bar' };
 
-Finally blocks are always executed making them suitable for cleanup code
-which cannot be handled using local.
+C<finally> blocks are always executed, making them suitable for cleanup code
+which cannot be handled using L<local|perlfunc/local>.
 
-The retry subroutine, when called from within a catch block, terminates the
-current catch block and restarts its try block.
+The retry subroutine, when called from within a C<catch> block, terminates the
+current C<catch> block and restarts its C<try> block.
 
 =head1 EXPORTS
 
@@ -293,12 +293,12 @@ Or even
   finally { ... }
   catch   { ... };
 
-Intended to be the second or third element of C<try>. Finally blocks are always
-executed in the event of a successful C<try> or if C<catch> is run. This allows
-you to locate cleanup code which cannot be done via C<local()> e.g. closing a
-file handle.
+Intended to be the second or third element of C<try>.  C<finally> blocks are
+always executed in the event of a successful C<try> or if C<catch> is run. This
+allows you to locate cleanup code which cannot be done via
+L<local()|perlfunc/local> e.g., closing a file handle.
 
-B<You must always do your own error handling in the finally block>.
+B<You must always do your own error handling in the C<finally> block>.
 C<Try::Tiny> will not do anything about handling possible errors coming from
 code located in these blocks.
 
