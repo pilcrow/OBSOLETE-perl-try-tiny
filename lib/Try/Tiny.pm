@@ -10,7 +10,7 @@ BEGIN {
 	@ISA = qw(Exporter);
 }
 
-$VERSION = "0.06";
+$VERSION = "0.11";
 
 $VERSION = eval $VERSION;
 
@@ -29,7 +29,7 @@ sub try (&;@) {
 	# to $failed
 	my $wantarray = wantarray;
 
-	my ( $catch, $finally );
+	my ( $catch, @finally );
 
 	# find labeled blocks in the argument list.
 	# catch and finally tag the blocks by blessing a scalar reference to them.
@@ -41,7 +41,7 @@ sub try (&;@) {
 		if ( $ref eq 'Try::Tiny::Catch' ) {
 			$catch = ${$code_ref};
 		} elsif ( $ref eq 'Try::Tiny::Finally' ) {
-			$finally = ${$code_ref};
+			push @finally, ${$code_ref};
 		} else {
 			use Carp;
 			confess("Unknown code ref type given '${ref}'. Check your usage & try again");
@@ -85,7 +85,9 @@ sub try (&;@) {
 	}
 
 	# set up a scope guard to invoke the finally block at the end
-	my $guard = $finally && bless \$finally, "Try::Tiny::ScopeGuard";
+	my @guards =
+    map { Try::Tiny::ScopeGuard->_new($_, $failed ? $error : ()) }
+    @finally;
 
 	# at this point $failed contains a true value if the eval died, even if some
 	# destructor overwrote $@ as the eval was unwinding.
@@ -127,9 +129,20 @@ sub finally (&;@) {
 	);
 }
 
-sub Try::Tiny::ScopeGuard::DESTROY {
-	my $self = shift;
-	$$self->();
+{
+  package # hide from PAUSE
+    Try::Tiny::ScopeGuard;
+
+  sub _new {
+    shift;
+    bless [ @_ ];
+  }
+
+  sub DESTROY {
+    my @guts = @{ shift() };
+    my $code = shift @guts;
+    $code->(@guts);
+  }
 }
 
 __PACKAGE__
@@ -144,12 +157,19 @@ Try::Tiny - minimal try/catch with proper localization of $@
 
 =head1 SYNOPSIS
 
+You can use Try::Tiny's C<try> and C<catch> to expect and handle exceptional
+conditions, avoiding quirks in Perl and common mistakes:
+
 	# handle errors with a catch handler
 	try {
 		die "foo";
 	} catch {
 		warn "caught error: $_"; # not $@
 	};
+
+You can also use it like a stanalone C<eval> to catch and ignore any error
+conditions.  Obviously, this is an extreme measure not to be undertaken
+lightly:
 
 	# just silence errors
 	try {
@@ -192,7 +212,8 @@ You can add finally blocks making the following true.
 	try { die 'foo' } catch { warn "Got a die: $_" } finally { $x = 'bar' };
 
 Finally blocks are always executed making them suitable for cleanup code
-which cannot be handled using local.
+which cannot be handled using local.  You can add as many finally blocks to a
+given try block as you like.
 
 =head1 EXPORTS
 
@@ -266,6 +287,24 @@ Intended to be the second or third element of C<try>. Finally blocks are always
 executed in the event of a successful C<try> or if C<catch> is run. This allows
 you to locate cleanup code which cannot be done via C<local()> e.g. closing a file
 handle.
+
+When invoked, the finally block is passed the error that was caught.  If no
+error was caught, it is passed nothing.  (Note that the finally block does not
+localize C<$_> with the error, since unlike in a catch block, there is no way
+to know if C<$_ == undef> implies that there were no errors.) In other words,
+the following code does just what you would expect:
+
+  try {
+    die_sometimes();
+  } catch {
+    # ...code run in case of error
+  } finally {
+    if (@_) {
+      print "The try block died with: @_\n";
+    } else {
+      print "The try block ran without error.\n";
+    }
+  };
 
 B<You must always do your own error handling in the finally block>. C<Try::Tiny> will
 not do anything about handling possible errors coming from code located in these
@@ -394,11 +433,21 @@ concisely match errors:
 
 =item *
 
-C<@_> is not available, you need to name your args:
+C<@_> is not available within the C<try> block, so you need to copy your
+arglist. In case you want to work with argument values directly via C<@_>
+aliasing (i.e. allow C<$_[1] = "foo">), you need to pass C<@_> by reference:
 
 	sub foo {
 		my ( $self, @args ) = @_;
 		try { $self->bar(@args) }
+	}
+
+or
+
+	sub bar_in_place {
+		my $self = shift;
+		my $args = \@_;
+		try { $_ = $self->bar($_) for @$args }
 	}
 
 =item *
@@ -406,12 +455,32 @@ C<@_> is not available, you need to name your args:
 C<return> returns from the C<try> block, not from the parent sub (note that
 this is also how C<eval> works, but not how L<TryCatch> works):
 
-	sub bar {
-		try { return "foo" };
-		return "baz";
-	}
+  sub parent_sub {
+      try {
+          die;
+      }
+      catch {
+          return;
+      };
 
-	say bar(); # "baz"
+      say "this text WILL be displayed, even though an exception is thrown";
+  }
+
+Instead, you should capture the return value:
+
+  sub parent_sub {
+      my $success = try {
+          die;
+          1;
+      }
+      return unless $success;
+
+      say "This text WILL NEVER appear!";
+  }
+
+Note that if you have a catch block, it must return undef for this to work,
+since if a catch block exists, its return value is returned in place of undef
+when an exception is thrown.
 
 =item *
 

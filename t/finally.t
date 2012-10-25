@@ -3,7 +3,7 @@
 use strict;
 #use warnings;
 
-use Test::More tests => 8;
+use Test::More tests => 24;
 
 BEGIN { use_ok 'Try::Tiny' };
 
@@ -38,5 +38,67 @@ try {
 	pass('Moved into finally block when try throws an exception and we have no catch block');
 };
 
+try {
+  die('Die');
+} finally {
+  pass('First finally clause run');
+} finally {
+  pass('Second finally clause run');
+};
 
+try {
+  # do not die
+} finally {
+  if (@_) {
+    fail("errors reported: @_");
+  } else {
+    pass("no error reported") ;
+  }
+};
+
+try {
+  die("Die\n");
+} finally {
+  is_deeply(\@_, [ "Die\n" ], "finally got passed the exception");
+};
+
+try {
+    try {
+        die "foo";
+    }
+    catch {
+        die "bar";
+    }
+    finally {
+        pass("finally called");
+    };
+};
+
+$_ = "foo";
+try {
+    is($_, "foo", "not localized in try");
+}
+catch {
+}
+finally {
+    is(scalar(@_), 0, "nothing in \@_ (finally)");
+    is($_, "foo", "\$_ not localized (finally)");
+};
+is($_, "foo", "same afterwards");
+
+$_ = "foo";
+try {
+    is($_, "foo", "not localized in try");
+    die "bar\n";
+}
+catch {
+    is($_[0], "bar\n", "error in \@_ (catch)");
+    is($_, "bar\n", "error in \$_ (catch)");
+}
+finally {
+    is(scalar(@_), 1, "error in \@_ (finally)");
+    is($_[0], "bar\n", "error in \@_ (finally)");
+    is($_, "foo", "\$_ not localized (finally)");
+};
+is($_, "foo", "same afterwards");
 1;

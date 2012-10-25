@@ -1,3 +1,19 @@
+0.11
+  - fix broken dist
+
+0.10
+  - clarify some docs
+
+0.09
+  - don't index Try::Tiny::ScopeGuard
+
+0.08
+  - fix require vs use issue in blead (RT63410)
+
+0.07
+  - allow multiple finally blocks
+  - pass the error, if any, to finally blocks when called
+
 0.06
 	- in t/given_when.t use a plan instead of done_testing for more backwards
 	  compatibility

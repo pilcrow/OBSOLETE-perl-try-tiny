@@ -11,6 +11,8 @@ BEGIN {
     use_ok("Try::Tiny");
 }
 
+use 5.010;
+
 my ( $error, $topic );
 
 given ("foo") {

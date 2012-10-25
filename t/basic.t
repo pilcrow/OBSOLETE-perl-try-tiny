@@ -82,6 +82,9 @@ is_deeply( [ try { die } catch {qw(foo bar gorch)} ], [qw(foo bar gorch)], "list
 {
 	my ($sub) = catch { my $a = $_; };
 	is(ref($sub), 'Try::Tiny::Catch', 'Checking catch subroutine scalar reference is correctly blessed');
+}
+
+{
 	my ($sub) = finally { my $a = $_; };
 	is(ref($sub), 'Try::Tiny::Finally', 'Checking finally subroutine scalar reference is correctly blessed');
 }
